@@ -49,8 +49,8 @@
                   <Icon>
                     <bt:Image size="32" resid="Icon.32"/>
                   </Icon>
-                  <Action xsi:type="ShowTaskpane">
-                    <SourceLocation resid="Taskpane.Url"/>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>testButton</FunctionName>
                   </Action>
                 </Control>
               </Group>
