@@ -78,7 +78,7 @@
       <bt:Images>
         <bt:Image id="Icon.16" DefaultValue="https://forensicode.web.app/assets/favicon-16x16.png"/>
         <bt:Image id="Icon.32" DefaultValue="https://forensicode.web.app/assets/favicon-32x32.png"/>
-        <bt:Image id="Icon.80" DefaultValue="https://forensicode.web.app/assets/favicon-32x32.png"/>
+          <bt:Image id="Icon.80" DefaultValue="https://forensicode.web.app/assets/favicon-192x192.png"/>
       </bt:Images>
 
       <bt:Urls>
