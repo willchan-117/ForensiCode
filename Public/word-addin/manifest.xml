@@ -13,6 +13,8 @@
 
   <DisplayName DefaultValue="ForensiCode"/>
   <Description DefaultValue="Human authorship verification."/>
+
+  <!-- These are required but NOT used for ribbon buttons -->
   <IconUrl DefaultValue="https://forensicode.web.app/assets/favicon-32x32.png"/>
   <HighResolutionIconUrl DefaultValue="https://forensicode.web.app/assets/favicon-80x80.png"/>
 
@@ -33,36 +35,50 @@
     <Hosts>
       <Host xsi:type="Document">
         <WebFormFactor>
-          <!-- Ribbon button function file -->
+
+          <!-- REQUIRED for ExecuteFunction -->
           <FunctionFile resid="Commands.Url"/>
 
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
               <Group id="ForensiCode.Group">
                 <Label resid="Group.Label"/>
+
                 <Control xsi:type="Button" id="ForensiCode.Button">
                   <Label resid="Button.Label"/>
+
                   <Supertip>
                     <Title resid="Button.Label"/>
                     <Description resid="Button.Tooltip"/>
                   </Supertip>
+
+                  <!-- ✅ REQUIRED ICON SIZES -->
                   <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
                     <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
                   </Icon>
+
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>testButton</FunctionName>
                   </Action>
                 </Control>
+
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+
         </WebFormFactor>
       </Host>
     </Hosts>
 
     <Resources>
+
+      <!-- ✅ ALL REQUIRED ICONS DEFINED -->
       <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://forensicode.web.app/assets/favicon-16x16.png"/>
         <bt:Image id="Icon.32" DefaultValue="https://forensicode.web.app/assets/favicon-32x32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://forensicode.web.app/assets/favicon-32x32.png"/>
       </bt:Images>
 
       <bt:Urls>
@@ -78,6 +94,7 @@
       <bt:LongStrings>
         <bt:String id="Button.Tooltip" DefaultValue="Open the ForensiCode verification panel"/>
       </bt:LongStrings>
+
     </Resources>
   </VersionOverrides>
 </OfficeApp>
