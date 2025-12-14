@@ -3,12 +3,14 @@
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
   xsi:type="TaskPaneApp">
 
   <Id>617dd45b-8656-4fe0-ab83-bed9db8c497a</Id>
-  <Version>1.0.0.9</Version>
+  <Version>1.0.1.0</Version>
   <ProviderName>ForensiCode</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
+
   <DisplayName DefaultValue="ForensiCode"/>
   <Description DefaultValue="Human authorship verification."/>
 
@@ -24,4 +26,67 @@
   </DefaultSettings>
 
   <Permissions>ReadWriteDocument</Permissions>
+
+  <!-- 🔽 THIS IS THE MISSING PART -->
+  <VersionOverrides xsi:type="ov:VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="ov:Document">
+        <DesktopFormFactor>
+
+          <FunctionFile resid="Commands.Url"/>
+
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="ForensiCode.Group">
+                <Label resid="ForensiCode.GroupLabel"/>
+
+                <Control xsi:type="Button" id="ForensiCode.Button">
+                  <Label resid="ForensiCode.ButtonLabel"/>
+                  <Supertip>
+                    <Title resid="ForensiCode.ButtonLabel"/>
+                    <Description resid="ForensiCode.ButtonDesc"/>
+                  </Supertip>
+
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://forensicode.web.app/assets/favicon-16x16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="https://forensicode.web.app/assets/favicon-32x32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://forensicode.web.app/assets/favicon-80x80.png"/>
+      </bt:Images>
+
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://forensicode.web.app/word-addin/taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://forensicode.web.app/word-addin/commands.html"/>
+      </bt:Urls>
+
+      <bt:ShortStrings>
+        <bt:String id="ForensiCode.GroupLabel" DefaultValue="ForensiCode"/>
+        <bt:String id="ForensiCode.ButtonLabel" DefaultValue="Verify Authorship"/>
+      </bt:ShortStrings>
+
+      <bt:LongStrings>
+        <bt:String id="ForensiCode.ButtonDesc" DefaultValue="Verify this document was written by a human."/>
+      </bt:LongStrings>
+    </Resources>
+
+  </VersionOverrides>
 </OfficeApp>

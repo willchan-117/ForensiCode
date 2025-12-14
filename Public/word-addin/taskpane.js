@@ -434,12 +434,26 @@ async function sha256(data) {
 function generateToken() {
   return "HV-" + [...crypto.getRandomValues(new Uint8Array(4))].map(x => x.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
-async function buildVerificationPackage(sessionData) {
-  const jsonString = JSON.stringify(sessionData);
-  const hash = await sha256(jsonString);
+async function buildVerificationPackage(exportPayload, docHash) {
+  // clone payload so hashing is stable
+  const payloadForHash = { ...exportPayload };
+
+  // compute report hash FIRST (no self-reference)
+  const reportIntegrityHash = await sha256(
+    JSON.stringify(payloadForHash)
+  );
+
   const token = generateToken();
-  return { token, hash, session: sessionData };
+
+  return {
+    reportIntegrityHash,
+    documentIntegrityHash: docHash || null,
+    exportedAt: exportPayload.exportedAt,
+    verificationToken: token,
+    report: exportPayload
+  };
 }
+
 
 function updateVerificationTokenUI() {
   const container = document.getElementById("verificationContainer");
@@ -518,11 +532,7 @@ async function exportJson(payload, filename) {
       exporterVersion: APP_VERSION
     };
 
-    const verificationPackage = await buildVerificationPackage(exportPayload);
-    if (docHash) {
-      verificationPackage.documentHash = docHash;
-      updateDocumentHashUI(docHash);
-    }
+    const verificationPackage = await buildVerificationPackage(exportPayload, docHash);
 
     verificationToken = verificationPackage.token;
     await saveVerificationToken(verificationToken);

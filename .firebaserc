@@ -1,5 +1,9 @@
 {
   "projects": {
-    "default": "forensicode"
-  }
+    "default": "forensicode",
+    "dev": "forensicode-dev",
+    "prod": "forensicode"
+  },
+  "targets": {},
+  "etags": {}
 }
