@@ -59,7 +59,7 @@
     <header>
       <img src="ForensiCode_logo.svg" alt="ForensiCode" onerror="this.style.display='none'">
       <div>
-        <h1>ForensiCode — Verification Checker</h1>
+        <h1>ForensiCode, The Human Verification Checker</h1>
         <p class="lead">Verify a student's exported report (.json) and the original .docx file locally — no uploading, no servers.</p>
       </div>
     </header>
@@ -128,11 +128,22 @@
       <strong>Privacy:</strong> No files are uploaded — all verification runs locally in your browser. ForensiCode processes file data in-memory only.
     </footer>
   </div>
-
 <script>
 function $(id){return document.getElementById(id);}
 
+// =====================
+// Globals (IMPORTANT)
+// =====================
+let selectedFiles = [];
+let processing = false;
+
+let telemetryObj = null;
+let previewCount = 5;
+const PREVIEW_STEP = 5;
+
+// =====================
 // File readers
+// =====================
 async function readFileAsArrayBuffer(file){
   return new Promise((res,rej)=>{
     const r=new FileReader();
@@ -151,40 +162,48 @@ async function readFileAsText(file){
   });
 }
 
-// SHA-256 hash
+// =====================
+// SHA-256
+// =====================
 async function sha256Hex(input){
   let buffer;
   if(typeof input==="string") buffer=new TextEncoder().encode(input);
   else if(input instanceof ArrayBuffer) buffer=input;
   else if(ArrayBuffer.isView(input)) buffer=input.buffer;
-  else throw new Error("sha256Hex: unsupported input type");
+  else throw new Error("Unsupported hash input");
 
   const digest=await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  return Array.from(new Uint8Array(digest))
+    .map(b=>b.toString(16).padStart(2,"0"))
+    .join("");
 }
 
-// File handling
-let selectedFiles=[];
+// =====================
+// Drag & drop
+// =====================
 const dropArea=$("drop-area");
 const fileInput=$("file-input");
-let processing=false;
 
-fileInput.addEventListener("change", ev=>handleFiles(ev.target.files));
-dropArea.addEventListener("click", ()=> fileInput.click());
-dropArea.addEventListener("dragover", ev=>{ev.preventDefault(); dropArea.classList.add("highlight");});
-dropArea.addEventListener("dragleave", ()=> dropArea.classList.remove("highlight"));
-dropArea.addEventListener("drop", ev=>{ev.preventDefault(); dropArea.classList.remove("highlight"); handleFiles(ev.dataTransfer.files);});
+fileInput.addEventListener("change", e=>handleFiles(e.target.files));
+dropArea.addEventListener("click", ()=>fileInput.click());
+dropArea.addEventListener("dragover", e=>{e.preventDefault();dropArea.classList.add("highlight");});
+dropArea.addEventListener("dragleave", ()=>dropArea.classList.remove("highlight"));
+dropArea.addEventListener("drop", e=>{
+  e.preventDefault();
+  dropArea.classList.remove("highlight");
+  handleFiles(e.dataTransfer.files);
+});
 
 function handleFiles(fileList){
   const map = new Map(selectedFiles.map(f=>[f.name,f]));
-  Array.from(fileList).forEach(f=> map.set(f.name,f));
+  Array.from(fileList).forEach(f=>map.set(f.name,f));
   selectedFiles = Array.from(map.values());
   refreshStatus();
 }
 
 function refreshStatus(){
-  const docx = selectedFiles.find(f=> f.name.toLowerCase().endsWith(".docx"));
-  const json = selectedFiles.find(f=> f.name.toLowerCase().endsWith(".json"));
+  const docx = selectedFiles.find(f=>f.name.toLowerCase().endsWith(".docx"));
+  const json = selectedFiles.find(f=>f.name.toLowerCase().endsWith(".json"));
 
   if(docx){
     $("docx-name").textContent=docx.name;
@@ -207,57 +226,85 @@ function refreshStatus(){
   }
 }
 
-// Raw JSON preview toggle
-let rawExpanded=false;
-function toggleRaw(){
-  const raw=$("rawJson");
-  rawExpanded=!rawExpanded;
-  if(rawExpanded){
-    raw.classList.remove("truncate");
-    $("rawToggle").textContent="Show less";
+// =====================
+// Preview rendering
+// =====================
+function renderPreview(){
+  const rawJsonEl = $("rawJson");
+  const toggleBtn = $("rawToggle");
+
+  if(!telemetryObj){
+    rawJsonEl.textContent="(no report)";
+    toggleBtn.style.display="none";
+    return;
+  }
+
+  const sessions = telemetryObj.sessions || [];
+
+  const preview = {
+    summary: telemetryObj.summary,
+    sessions: sessions.slice(0, previewCount)
+  };
+
+  rawJsonEl.textContent =
+    JSON.stringify(preview, null, 2) +
+    (sessions.length > previewCount
+      ? `\n\n[Showing ${previewCount} of ${sessions.length} sessions]`
+      : "");
+
+  if(previewCount >= sessions.length){
+    toggleBtn.style.display="none";
   } else {
-    raw.classList.add("truncate");
-    $("rawToggle").textContent="Show more";
+    toggleBtn.style.display="inline-block";
+    toggleBtn.textContent="Show more";
   }
 }
 
-// Collect flags
+function toggleRaw(){
+  if(!telemetryObj) return;
+  const sessions = telemetryObj.sessions || [];
+  previewCount = Math.min(previewCount + PREVIEW_STEP, sessions.length);
+  renderPreview();
+}
+
+// =====================
+// Flags
+// =====================
 function collectFlags(pkg){
   const flags={largePaste:0,speedSpike:0,sustainedSpeed:0};
   const arr=pkg.telemetrySession?.sessions ?? pkg.session?.sessions ?? pkg.sessions ?? [];
   if(!Array.isArray(arr)) return flags;
+
   for(const s of arr){
     if(!s.flags) continue;
-    if(s.flags.largePaste===true) flags.largePaste++;
-    if(s.flags.speedSpike===true) flags.speedSpike++;
-    if(s.flags.sustainedSpeed===true) flags.sustainedSpeed++;
+    if(s.flags.largePaste) flags.largePaste++;
+    if(s.flags.speedSpike) flags.speedSpike++;
+    if(s.flags.sustainedSpeed) flags.sustainedSpeed++;
   }
   return flags;
 }
 
-// Main verification
+// =====================
+// Verify
+// =====================
 async function verify(){
   if(processing) return;
   processing=true;
+
   try{
     const resultEl=$("result");
-    const rawJsonEl=$("rawJson");
     const debugEl=$("debug");
-    const copyReportHashBtn=$("copyReportHash");
-    const copyDocHashBtn=$("copyDocHash");
 
     resultEl.className="";
-    resultEl.textContent="Processing… computing hashes locally…";
-    rawJsonEl.textContent="(no report)";
-    debugEl.textContent="(no debug info)";
-    copyReportHashBtn.style.display="none";
-    copyDocHashBtn.style.display="none";
+    resultEl.textContent="Processing…";
+    debugEl.textContent="";
 
-    const docxFile=selectedFiles.find(f=> f.name.toLowerCase().endsWith(".docx"));
-    const jsonFile=selectedFiles.find(f=> f.name.toLowerCase().endsWith(".json"));
+    const docxFile=selectedFiles.find(f=>f.name.toLowerCase().endsWith(".docx"));
+    const jsonFile=selectedFiles.find(f=>f.name.toLowerCase().endsWith(".json"));
+
     if(!docxFile || !jsonFile){
       resultEl.className="result-fail";
-      resultEl.textContent="❌ Please select both a .docx and the exported .json report.";
+      resultEl.textContent="❌ Please select both a .docx and .json file.";
       return;
     }
 
@@ -265,101 +312,56 @@ async function verify(){
     const computedDocHash=await sha256Hex(docBuffer);
 
     const jsonText=await readFileAsText(jsonFile);
-    let packageObj;
-    try{ packageObj=JSON.parse(jsonText); } 
-    catch(e){ throw new Error("Invalid JSON file (unable to parse)."); }
+    const pkg=JSON.parse(jsonText);
 
-    // Determine telemetry object for preview and hash
-    const telemetryObj = packageObj.telemetrySession ?? packageObj.session ?? packageObj;
+    telemetryObj = pkg.telemetrySession ?? pkg.session ?? pkg;
+    previewCount = 5;
+    renderPreview();
 
-    // Show preview
-    const pretty=JSON.stringify(telemetryObj,null,2);
-    rawJsonEl.textContent = pretty.length>2000 ? pretty.slice(0,2000)+"\n\n[... truncated ...]" : pretty;
-
-    // Show copy buttons if hashes exist
-    if(packageObj.reportIntegrityHash || packageObj.hash) copyReportHashBtn.style.display="inline-block";
-    if(packageObj.documentIntegrityHash) copyDocHashBtn.style.display="inline-block";
-
-    // Compute report hash
     const recomputedReportHash = await sha256Hex(JSON.stringify(telemetryObj));
+    const embeddedReportHash = pkg.reportIntegrityHash ?? pkg.hash ?? null;
 
-    // Verify report integrity
-    const reportHash = packageObj.reportIntegrityHash ?? packageObj.hash ?? null;
-    if(reportHash){
-      if(recomputedReportHash !== reportHash){
-        resultEl.className="result-fail";
-        resultEl.textContent="❌ Report integrity failed — JSON appears to have been modified after export.";
-        debugEl.textContent=`Recomputed: ${recomputedReportHash}\nEmbedded: ${reportHash}`;
-        return;
-      }
-    } else {
-      debugEl.textContent="⚠️ Warning: No 'reportIntegrityHash' field present in JSON.\n";
+    if(embeddedReportHash && embeddedReportHash !== recomputedReportHash){
+      resultEl.className="result-fail";
+      resultEl.textContent="❌ Report integrity failed.";
+      debugEl.textContent=`Recomputed: ${recomputedReportHash}\nEmbedded: ${embeddedReportHash}`;
+      return;
     }
 
-    // Verify document integrity
-    if(packageObj.documentIntegrityHash){
-      if(packageObj.documentIntegrityHash !== computedDocHash){
-        resultEl.className="result-fail";
-        resultEl.textContent="❌ Document mismatch — uploaded DOCX does not match exported report.";
-        debugEl.textContent=`Computed DOCX: ${computedDocHash}\nExpected: ${packageObj.documentIntegrityHash}`;
-        return;
-      }
-    } else {
-      debugEl.textContent+="\n⚠️ Warning: No 'documentIntegrityHash' in JSON — unable to verify DOCX integrity.\n";
+    const embeddedDocHash =
+      pkg.documentIntegrityHash ??
+      pkg.summary?.documentIntegrityHash ??
+      null;
+
+    if(embeddedDocHash && embeddedDocHash !== computedDocHash){
+      resultEl.className="result-fail";
+      resultEl.textContent="❌ Document mismatch.";
+      debugEl.textContent=`Computed: ${computedDocHash}\nExpected: ${embeddedDocHash}`;
+      return;
     }
 
-    // Check activity flags
-    const aggregatedFlags = collectFlags(packageObj);
-    let flagSummary;
-    if(aggregatedFlags.largePaste===0 && aggregatedFlags.speedSpike===0 && aggregatedFlags.sustainedSpeed===0) 
-      flagSummary="No suspicious activity flags detected.";
-    else 
-      flagSummary=`• Large Paste Events: ${aggregatedFlags.largePaste}\n• Speed Spike Events: ${aggregatedFlags.speedSpike}\n• Sustained High-Speed Typing Events: ${aggregatedFlags.sustainedSpeed}`;
+    const flags = collectFlags(pkg);
+    const flagSummary =
+      flags.largePaste===0 && flags.speedSpike===0 && flags.sustainedSpeed===0
+      ? "No suspicious activity flags detected."
+      : `• Large Paste: ${flags.largePaste}\n• Speed Spike: ${flags.speedSpike}\n• Sustained Speed: ${flags.sustainedSpeed}`;
 
-    // Success
     resultEl.className="result-pass";
-    resultEl.textContent=`✅ VERIFICATION PASSED — Document and report match.\n\nSuspicious Activity Flags:\n${flagSummary}`;
+    resultEl.textContent=`✅ VERIFICATION PASSED\n\nSuspicious Activity Flags:\n${flagSummary}`;
 
-    debugEl.textContent += `\nComputedReportHash: ${recomputedReportHash}\nComputedDocHash: ${computedDocHash}\nExportedAt: ${packageObj.exportedAt ?? packageObj.timestamp ?? "N/A"}`;
+    debugEl.textContent =
+      `ComputedReportHash: ${recomputedReportHash}\n` +
+      `ComputedDocHash: ${computedDocHash}\n` +
+      `ExportedAt: ${pkg.exportedAt ?? pkg.timestamp ?? "N/A"}`;
 
   } catch(err){
-    const resultEl=$("result");
-    const debugEl=$("debug");
-    resultEl.className="result-fail";
-    resultEl.textContent=`❌ Verification error: ${err.message}`;
-    debugEl.textContent=err.stack || String(err);
+    $("result").className="result-fail";
+    $("result").textContent=`❌ Error: ${err.message}`;
+    $("debug").textContent=err.stack || String(err);
   } finally {
     processing=false;
   }
 }
-
-// Copy buttons
-$("copyReportHash").addEventListener("click", async ()=>{
-  try{
-    const jsonFile=selectedFiles.find(f=> f.name.toLowerCase().endsWith(".json")); 
-    if(!jsonFile) return alert("No report file selected"); 
-    const text=await readFileAsText(jsonFile); 
-    const pkg=JSON.parse(text); 
-    const reportHash = pkg.reportIntegrityHash ?? pkg.hash ?? null;
-    if(!reportHash) return alert("No reportIntegrityHash found"); 
-    await navigator.clipboard.writeText(reportHash); 
-    $("copyReportHash").textContent="Copied!";
-    setTimeout(()=> $("copyReportHash").textContent="Copy report hash",1500);
-  } catch(e){alert("Copy failed");}
-});
-
-$("copyDocHash").addEventListener("click", async ()=>{
-  try{
-    const jsonFile=selectedFiles.find(f=> f.name.toLowerCase().endsWith(".json")); 
-    if(!jsonFile) return alert("No report file selected"); 
-    const text=await readFileAsText(jsonFile); 
-    const pkg=JSON.parse(text); 
-    if(!pkg.documentIntegrityHash) return alert("No documentIntegrityHash found"); 
-    await navigator.clipboard.writeText(pkg.documentIntegrityHash); 
-    $("copyDocHash").textContent="Copied!";
-    setTimeout(()=> $("copyDocHash").textContent="Copy doc hash",1500);
-  } catch(e){alert("Copy failed");}
-});
 
 refreshStatus();
 </script>
