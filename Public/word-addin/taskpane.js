@@ -435,23 +435,27 @@ function generateToken() {
   return "HV-" + [...crypto.getRandomValues(new Uint8Array(4))].map(x => x.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 async function buildVerificationPackage(telemetrySession, docHash) {
-  // IMPORTANT:
-  // Hash EXACTLY what the verifier hashes: telemetrySession only
-  const reportIntegrityHash = await sha256(
-    JSON.stringify(telemetrySession)
-  );
+  const exportedAt = new Date().toISOString();
 
-  const token = generateToken();
+  // 1. Build canonical payload FIRST
+  const payload = {
+    telemetry: telemetrySession,
+    documentIntegrityHash: docHash,
+    exportedAt,
+    exporterVersion: APP_VERSION
+  };
 
+  // 2. Hash EXACTLY what will be verified
+  const canonical = JSON.stringify(payload);
+  const reportIntegrityHash = await sha256(canonical);
+
+  // 3. Attach verification metadata
   return {
+    ...payload,
     reportIntegrityHash,
-    documentIntegrityHash: docHash || null,
-    exportedAt: telemetrySession.exportedAt,
-    verificationToken: token,
-    telemetrySession
+    verificationToken: generateToken()
   };
 }
-
 
 
 function updateVerificationTokenUI() {
