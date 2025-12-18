@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-  <title>ForensiCode, The Human Verification Checker (v1.1 Test)</title>
+  <title>ForensiCode, The Human Verification Checker (v1.2 Test)</title>
  <style>
 :root{
   --bg:#f4f6f8;
@@ -207,7 +207,7 @@ footer{
     <header>
       <img src="ForensiCode_logo.svg" alt="ForensiCode" onerror="this.style.display='none'">
       <div>
-        <h1>ForensiCode, The Human Verification Checker</h1>
+        <h1>ForensiCode, The Human Verification Checker (v1.1 Test)</h1>
         <p class="lead">
           Verify a student's exported report (.json) and the original .docx file locally —
           no uploading, no servers.
@@ -467,19 +467,43 @@ function collectFlags(pkg){
 // =====================
 // DOCX canonical text extraction
 // =====================
-async function extractCanonicalTextFromDocx(arrayBuffer){
-  // DOCX is a ZIP → extract word/document.xml
-  const zip = await JSZip.loadAsync(arrayBuffer);
-  const docXml = await zip.file("word/document.xml").async("string");
+async function extractCanonicalTextFromDocx(arrayBuffer) {
+  if (!window.JSZip) {
+    throw new Error("JSZip not loaded");
+  }
 
-  // Remove XML tags, preserve paragraph breaks
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  // 🔎 Debug / compatibility: find document.xml safely
+  const docFile =
+    zip.file("word/document.xml") ||
+    zip.file("word/document2.xml"); // fallback (rare but real)
+
+  if (!docFile) {
+    // 👇 This makes failures explicit instead of silently passing
+    throw new Error(
+      "Invalid DOCX: word/document.xml not found. " +
+      "This file may be from Word Online or not fully saved."
+    );
+  }
+
+  const docXml = await docFile.async("string");
+
+  // Canonical text extraction
   const text = docXml
-    .replace(/<w:p[\s\S]*?<\/w:p>/g, m =>
-      m.replace(/<[^>]+>/g, "").trim() + "\n"
+    // Preserve paragraph boundaries
+    .replace(/<w:p[\s\S]*?<\/w:p>/g, p =>
+      p.replace(/<[^>]+>/g, "").trim() + "\n"
     )
+    // Strip remaining XML
     .replace(/<[^>]+>/g, "")
+    // Normalize whitespace
     .replace(/\n{2,}/g, "\n")
     .trim();
+
+  if (!text) {
+    throw new Error("Canonical text extraction produced empty result");
+  }
 
   return text;
 }
